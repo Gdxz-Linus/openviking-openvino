@@ -1,0 +1,13 @@
+{
+  "name": "openviking-vlm-follow",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "让 OpenViking 的记忆抽取 VLM 跟随 DSH 当前实际使用的模型通道",
+  "main": "index.js",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

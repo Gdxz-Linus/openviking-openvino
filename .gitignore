@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 运行产物
+ov_cache/
+*.log
+docs/*.tmp
+
+# 真实配置与凭据
+ov.conf
+.env
+*.bak
+*.bak-*
+
+# 模型权重
+models/*.xml
+models/*.bin
+models/*.gguf
+
+# 编辑器
+.vscode/
+.idea/

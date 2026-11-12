@@ -1,0 +1,33 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 1933,
+    "log_level": "INFO"
+  },
+  "storage": {
+    "workspace": "D:/OpenViking/data",
+    "vectordb": {
+      "name": "context",
+      "backend": "local"
+    },
+    "agfs": {
+      "backend": "local"
+    }
+  },
+  "embedding": {
+    "dense": {
+      "provider": "local",
+      "model": "harrier-ov-int8",
+      "dimension": 1024,
+      "cache_dir": "D:/OpenViking/models"
+    },
+    "max_input_tokens": 4096,
+    "allow_metadata_override": true
+  },
+  "vlm": {
+    "provider": "openai",
+    "model": "deepseek-v4.1-flash",
+    "api_base": "http://127.0.0.1:8006/v1",
+    "api_key": "REPLACE_WITH_YOUR_KEY"
+  }
+}
