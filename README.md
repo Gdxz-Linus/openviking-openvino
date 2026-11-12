@@ -4,6 +4,77 @@
 
 OpenViking 0.5.3 原生只支持 llama-cpp（GGUF）本地嵌入。本仓库补上 OpenVINO Runtime 后端，让 Intel CPU、核显或 NPU 可以直接跑 int8 量化模型；同一份模型既能进程内推理，也能作为独立 HTTP 服务被调用。
 
+## 适用对象
+
+| 你的情况 | 是否适合 |
+| --- | --- |
+| 用 OpenViking 做本地记忆或知识库，机器是 Intel CPU、核显或 NPU | 适合 |
+| 想摆脱 llama.cpp 在 Intel 平台上的性能限制 | 适合 |
+| 需要在进程内与 HTTP 两种形态之间切换 | 适合 |
+| 用 NVIDIA 显卡 | 不适合。llama.cpp 的 CUDA 后端更直接，OpenVINO 没有优势 |
+| 用 AMD 显卡 | 不适合。OpenVINO 对 AMD 的支持有限 |
+| 只想用 OpenViking 默认配置 | 不需要。官方内置 bge-small 开箱即用 |
+| 不愿承担升级后重打补丁的维护 | 谨慎。本仓库是补丁形态，不是上游内置能力 |
+
+本仓库由三部分组成，各自独立可用，不必全装：
+
+| 部分 | 解决什么 | 谁需要 |
+| --- | --- | --- |
+| 嵌入后端补丁 | 让 OpenViking 支持 OpenVINO（进程内或 HTTP） | 想在 Intel 平台跑本地嵌入的人 |
+| HTTP 嵌入服务 | 把 OpenVINO 包成 OpenAI 兼容接口 | 要用 HTTP 形态、或多实例共享一块 GPU 的人 |
+| 记忆模型同步插件 | 让记忆抽取模型跟随主系统 | 同时跑 Hermes 或 DSH 的人 |
+
+## 基础条件
+
+| 项目 | 要求 | 检查方法 |
+| --- | --- | --- |
+| OpenViking | 0.5.3（补丁锚点按该版本编写） | `pip show openviking` |
+| Python | 3.13（用 OpenViking 自带 venv 即可） | — |
+| OpenVINO Runtime | 2024 及以上 | `python -c "import openvino; print(openvino.__version__)"` |
+| 模型 | OpenVINO IR 格式（xml、bin、tokenizer） | 见下方模型表 |
+| 硬件 | Intel CPU 可跑；核显或 NPU 需要对应驱动 | `python -c "import openvino as ov; print(ov.Core().available_devices)"` |
+| 磁盘 | 模型约 600 MB 起，编译缓存约 2 GB | — |
+| 内存 | 进程内形态常驻约 1.6 GB | 任务管理器观察 |
+
+前端给出的 `available_devices` 里应包含 `GPU` 或 `CPU`。只有 `CPU` 时功能正常，长文本会明显变慢。
+
+## 模型下载
+
+以下模型都已核实仓库地址，均为原始格式，需要转换成 OpenVINO IR。
+
+| 模型 | 维度 | 上下文 | 原始仓库 | 国内镜像 | 特点 |
+| --- | --- | --- | --- | --- | --- |
+| harrier-oss-v1-0.6b | 1024 | 32768 | [huggingface.co/microsoft/harrier-oss-v1-0.6b](https://huggingface.co/microsoft/harrier-oss-v1-0.6b) | [hf-mirror.com/microsoft/harrier-oss-v1-0.6b](https://hf-mirror.com/microsoft/harrier-oss-v1-0.6b) | 微软，检索专用，MTEB v2 得分 69.0，查询侧必须加指令前缀 |
+| Qwen3-Embedding-0.6B | 1024（可自定义 32 到 1024） | 32768 | [huggingface.co/Qwen/Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) | [modelscope.cn/models/Qwen/Qwen3-Embedding-0.6B](https://modelscope.cn/models/Qwen/Qwen3-Embedding-0.6B) | 阿里，100 多种语言，月下载 876 万 |
+| bge-m3 | 1024 | 8192 | [huggingface.co/BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3) | [hf-mirror.com/BAAI/bge-m3](https://hf-mirror.com/BAAI/bge-m3) | 智源，多语言，不需要指令前缀，月下载 2928 万 |
+| bge-small-zh-v1.5 | 512 | 512 | [huggingface.co/CompendiumLabs/bge-small-zh-v1.5-gguf](https://huggingface.co/CompendiumLabs/bge-small-zh-v1.5-gguf) | 同路径换 hf-mirror | OpenViking 官方默认，GGUF 格式，走 llama.cpp 而非 OpenVINO |
+
+### 转换成 OpenVINO IR
+
+```bash
+pip install optimum[openvino]
+
+optimum-cli export openvino \
+  --model microsoft/harrier-oss-v1-0.6b \
+  --task feature-extraction \
+  --weight-format int8 \
+  D:/OpenViking/models/harrier-ov-int8
+```
+
+导出后按本仓库要求的目录结构摆放：
+
+```
+D:/OpenViking/models/harrier-ov-int8/
+├── int8/
+│   ├── openvino_model.xml
+│   └── openvino_model.bin
+└── tokenizer.json
+```
+
+如果导出工具把 xml 与 bin 直接放在输出目录根下，把它们移到 `int8/` 子目录，或者修改 `ov.conf` 的 `cache_dir` 与模型目录名来匹配。
+
+`--weight-format int8` 是量化开关，不加则导出 fp32，体积约为 int8 的四倍。转换过程需要下载原模型，国内网络建议先设 `HF_ENDPOINT=https://hf-mirror.com`。
+
 ## 两种形态
 
 | | 进程内 | HTTP 服务 |
