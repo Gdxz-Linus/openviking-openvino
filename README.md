@@ -58,15 +58,26 @@ OpenViking 官方默认的本地嵌入模型是 `bge-small-zh-v1.5`：512 维、
 
 ## 模型下载
 
-以下模型都已核实仓库地址，均为原始格式，需要转换成 OpenVINO IR。两款支持 32768 上下文，三款支持 8192。
+以下模型都已核实仓库地址，均为原始格式，需要转换成 OpenVINO IR。六个支持 32768 上下文，三个支持 8192。
 
-| 模型 | 维度 | 上下文 | 原始仓库 | 国内镜像 | 特点 |
-| --- | --- | --- | --- | --- | --- |
-| harrier-oss-v1-0.6b | 1024 | 32768 | [huggingface.co/microsoft/harrier-oss-v1-0.6b](https://huggingface.co/microsoft/harrier-oss-v1-0.6b) | [hf-mirror.com/microsoft/harrier-oss-v1-0.6b](https://hf-mirror.com/microsoft/harrier-oss-v1-0.6b) | 微软，检索专用，MTEB v2 得分 69.0，查询侧必须加指令前缀 |
-| Qwen3-Embedding-0.6B | 1024（可自定义 32 到 1024） | 32768 | [huggingface.co/Qwen/Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) | [modelscope.cn/models/Qwen/Qwen3-Embedding-0.6B](https://modelscope.cn/models/Qwen/Qwen3-Embedding-0.6B) | 阿里，100 多种语言，月下载 876 万 |
-| bge-m3 | 1024 | 8192 | [huggingface.co/BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3) | [hf-mirror.com/BAAI/bge-m3](https://hf-mirror.com/BAAI/bge-m3) | 智源，多语言，不需要指令前缀，月下载 2928 万 |
-| gte-multilingual-base | 768 | 8192 | [huggingface.co/Alibaba-NLP/gte-multilingual-base](https://huggingface.co/Alibaba-NLP/gte-multilingual-base) | [hf-mirror.com/Alibaba-NLP/gte-multilingual-base](https://hf-mirror.com/Alibaba-NLP/gte-multilingual-base) | 阿里通义，70 多种语言，编码器架构推理更快，月下载 88 万 |
-| jina-embeddings-v2-base-zh | 768 | 8192 | [huggingface.co/jinaai/jina-embeddings-v2-base-zh](https://huggingface.co/jinaai/jina-embeddings-v2-base-zh) | [hf-mirror.com/jinaai/jina-embeddings-v2-base-zh](https://hf-mirror.com/jinaai/jina-embeddings-v2-base-zh) | Jina AI，中英双语，8192 序列长文本，需登录 Hugging Face 才能下载 |
+| 模型 | 参数量 | 维度 | 上下文 | 原始仓库 | 国内镜像 | 特点 |
+| --- | --- | --- | --- | --- | --- | --- |
+| harrier-oss-v1-0.6b | 0.6B | 1024 | 32768 | [huggingface.co/microsoft/harrier-oss-v1-0.6b](https://huggingface.co/microsoft/harrier-oss-v1-0.6b) | [hf-mirror.com/microsoft/harrier-oss-v1-0.6b](https://hf-mirror.com/microsoft/harrier-oss-v1-0.6b) | 微软，检索专用，MTEB v2 得分 69.0，查询侧必须加指令前缀 |
+| Qwen3-Embedding-0.6B | 0.6B | 1024（可自定义 32 到 1024） | 32768 | [huggingface.co/Qwen/Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) | [modelscope.cn/models/Qwen/Qwen3-Embedding-0.6B](https://modelscope.cn/models/Qwen/Qwen3-Embedding-0.6B) | 阿里，100 多种语言，月下载 876 万 |
+| gte-Qwen2-1.5B-instruct | 1.5B | 1536 | 32768 | [huggingface.co/Alibaba-NLP/gte-Qwen2-1.5B-instruct](https://huggingface.co/Alibaba-NLP/gte-Qwen2-1.5B-instruct) | [hf-mirror.com/Alibaba-NLP/gte-Qwen2-1.5B-instruct](https://hf-mirror.com/Alibaba-NLP/gte-Qwen2-1.5B-instruct) | 阿里通义，MTEB 67.16、C-MTEB 67.65，fp32 内存 6.6 GB |
+| Qwen3-Embedding-4B | 4B | 2560（可自定义 32 到 2560） | 32768 | [huggingface.co/Qwen/Qwen3-Embedding-4B](https://huggingface.co/Qwen/Qwen3-Embedding-4B) | [modelscope.cn/models/Qwen/Qwen3-Embedding-4B](https://modelscope.cn/models/Qwen/Qwen3-Embedding-4B) | 阿里，MTEB 多语言 69.45，月下载 242 万 |
+| Qwen3-Embedding-8B | 8B | 4096（可自定义 32 到 4096） | 32768 | [huggingface.co/Qwen/Qwen3-Embedding-8B](https://huggingface.co/Qwen/Qwen3-Embedding-8B) | [modelscope.cn/models/Qwen/Qwen3-Embedding-8B](https://modelscope.cn/models/Qwen/Qwen3-Embedding-8B) | 阿里，MTEB 多语言 70.58 排名第一，月下载 236 万 |
+| bge-m3 | 0.6B | 1024 | 8192 | [huggingface.co/BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3) | [hf-mirror.com/BAAI/bge-m3](https://hf-mirror.com/BAAI/bge-m3) | 智源，多语言，不需要指令前缀，月下载 2928 万 |
+| gte-multilingual-base | 0.3B | 768 | 8192 | [huggingface.co/Alibaba-NLP/gte-multilingual-base](https://huggingface.co/Alibaba-NLP/gte-multilingual-base) | [hf-mirror.com/Alibaba-NLP/gte-multilingual-base](https://hf-mirror.com/Alibaba-NLP/gte-multilingual-base) | 阿里通义，70 多种语言，编码器架构推理更快，月下载 88 万 |
+| jina-embeddings-v2-base-zh | 0.16B | 768 | 8192 | [huggingface.co/jinaai/jina-embeddings-v2-base-zh](https://huggingface.co/jinaai/jina-embeddings-v2-base-zh) | [hf-mirror.com/jinaai/jina-embeddings-v2-base-zh](https://hf-mirror.com/jinaai/jina-embeddings-v2-base-zh) | Jina AI，中英双语，8192 序列长文本，需登录 Hugging Face 才能下载 |
+
+按硬件挑：
+
+| 硬件 | 可选模型 |
+| --- | --- |
+| Intel 核显（8 GB 共享内存以内） | 0.3B 到 0.6B 级：harrier、Qwen3-0.6B、bge-m3、gte-multilingual-base、jina-zh |
+| 独显 8 GB 以上 | 加上 gte-Qwen2-1.5B、Qwen3-4B |
+| 独显 24 GB 或服务器 | 加上 Qwen3-8B |
 
 ### 转换成 OpenVINO IR
 
@@ -124,16 +135,17 @@ HTTP 形态慢在 FastAPI 与 Pydantic 的请求处理，实测 6 到 9 倍差�
 
 上下文开得越大，能完整入库的内容越多，但嵌入耗时超线性增长。下表是 2026 年 11 月在本机记忆库上的实测。
 
-| 上下文 | 内容完整入库 | 长文排第 1（头/中/尾） | 长文进前 3（头/中/尾） | 单次嵌入 12647 字符 | 重建 135 条 |
-| --- | --- | --- | --- | --- | --- |
-| 512（OpenViking 默认） | 49.3%，134 个文件中 68 个被截断，被截断者平均只保留 49.6% | — | — | 2.0 秒 | 约 5 分钟 |
-| 1024 | — | — | — | 4.5 秒 | 约 10 分钟 |
-| 2048 | 覆盖到 P90（1726 token） | — | — | 约 7 秒 | 约 20 分钟 |
-| 4096（本仓库采用） | 96.8%，158 个文件中 5 个超限 | 67% / 0% / 0% | 100% / 100% / 100% | 27 秒 | 约 60 分钟 |
-| 8192 | 99.1%，只多覆盖 2 个文件 | 未单独测 | 未单独测 | 67 秒 | 约 150 分钟 |
+| 上下文 | 内容完整入库 | 长文排第 1（头/中/尾） | 长文进前 3（头/中/尾） | 单次嵌入 12647 字符 |
+| --- | --- | --- | --- | --- |
+| 512（OpenViking 默认） | 49.3%，134 个文件中 68 个被截断，被截断者平均只保留 49.6% | — | — | 2.0 秒 |
+| 1024 | — | — | — | 4.5 秒 |
+| 2048 | 覆盖到 P90（1726 token） | — | — | 约 7 秒 |
+| 4096（本仓库采用） | 96.8%，158 个文件中 5 个超限 | 67% / 0% / 0% | 100% / 100% / 100% | 27 秒 |
+| 8192 | 99.1%，只多覆盖 2 个文件 | 未单独测 | 未单独测 | 67 秒 |
 
 几点说明：
 
+- **这张表怎么测的。** 检索成功率不是在空库上测的，前提是文档已经完成嵌入、向量已写入库。每条查询只嵌入一次问题文本（几十到几百毫秒），再与库内已有向量算余弦相似度，看目标文件排第几。所以它衡量的是「库建好之后，这套配置找得到找不到内容」，不包含建库耗时。
 - 512 档的 49.3% 是拆分前的统计口径。当时 134 个记忆文件里 68 个被截断，合计丢失 12.2 万字。
 - 4096 档的 96.8% 对应 158 个文件，token 分布为 P50 935、P90 2402、P99 7159、P100 8739。
 - 长文检索每档样本 6 个，数量小，只能定性参考，不能当统计结论。
