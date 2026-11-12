@@ -58,14 +58,15 @@ OpenViking 官方默认的本地嵌入模型是 `bge-small-zh-v1.5`：512 维、
 
 ## 模型下载
 
-以下模型都已核实仓库地址，均为原始格式，需要转换成 OpenVINO IR。
+以下模型都已核实仓库地址，均为原始格式，需要转换成 OpenVINO IR。两款支持 32768 上下文，三款支持 8192。
 
 | 模型 | 维度 | 上下文 | 原始仓库 | 国内镜像 | 特点 |
 | --- | --- | --- | --- | --- | --- |
 | harrier-oss-v1-0.6b | 1024 | 32768 | [huggingface.co/microsoft/harrier-oss-v1-0.6b](https://huggingface.co/microsoft/harrier-oss-v1-0.6b) | [hf-mirror.com/microsoft/harrier-oss-v1-0.6b](https://hf-mirror.com/microsoft/harrier-oss-v1-0.6b) | 微软，检索专用，MTEB v2 得分 69.0，查询侧必须加指令前缀 |
 | Qwen3-Embedding-0.6B | 1024（可自定义 32 到 1024） | 32768 | [huggingface.co/Qwen/Qwen3-Embedding-0.6B](https://huggingface.co/Qwen/Qwen3-Embedding-0.6B) | [modelscope.cn/models/Qwen/Qwen3-Embedding-0.6B](https://modelscope.cn/models/Qwen/Qwen3-Embedding-0.6B) | 阿里，100 多种语言，月下载 876 万 |
 | bge-m3 | 1024 | 8192 | [huggingface.co/BAAI/bge-m3](https://huggingface.co/BAAI/bge-m3) | [hf-mirror.com/BAAI/bge-m3](https://hf-mirror.com/BAAI/bge-m3) | 智源，多语言，不需要指令前缀，月下载 2928 万 |
-| bge-small-zh-v1.5 | 512 | 512 | [huggingface.co/CompendiumLabs/bge-small-zh-v1.5-gguf](https://huggingface.co/CompendiumLabs/bge-small-zh-v1.5-gguf) | 同路径换 hf-mirror | OpenViking 官方默认，GGUF 格式，走 llama.cpp 而非 OpenVINO |
+| gte-multilingual-base | 768 | 8192 | [huggingface.co/Alibaba-NLP/gte-multilingual-base](https://huggingface.co/Alibaba-NLP/gte-multilingual-base) | [hf-mirror.com/Alibaba-NLP/gte-multilingual-base](https://hf-mirror.com/Alibaba-NLP/gte-multilingual-base) | 阿里通义，70 多种语言，编码器架构推理更快，月下载 88 万 |
+| jina-embeddings-v2-base-zh | 768 | 8192 | [huggingface.co/jinaai/jina-embeddings-v2-base-zh](https://huggingface.co/jinaai/jina-embeddings-v2-base-zh) | [hf-mirror.com/jinaai/jina-embeddings-v2-base-zh](https://hf-mirror.com/jinaai/jina-embeddings-v2-base-zh) | Jina AI，中英双语，8192 序列长文本，需登录 Hugging Face 才能下载 |
 
 ### 转换成 OpenVINO IR
 
@@ -118,6 +119,29 @@ HTTP 形态慢在 FastAPI 与 Pydantic 的请求处理，实测 6 到 9 倍差�
 三档都在 4096 上下文内完成，最后一档已经顶到上限，再长的文本不会更慢，只会被截断。
 
 端到端效果：重建 200 条记忆的向量库从约 20 分钟降到约 3 分钟。短查询收益有限，因为 GPU 固定开销占比高；长文档与批量嵌入才是 OpenVINO 的价值所在。
+
+### 上下文长度与检索效果
+
+上下文开得越大，能完整入库的内容越多，但嵌入耗时超线性增长。下表是 2026 年 11 月在本机记忆库上的实测。
+
+| 上下文 | 内容完整入库 | 长文排第 1（头/中/尾） | 长文进前 3（头/中/尾） | 单次嵌入 12647 字符 | 重建 135 条 |
+| --- | --- | --- | --- | --- | --- |
+| 512（OpenViking 默认） | 49.3%，134 个文件中 68 个被截断，被截断者平均只保留 49.6% | — | — | 2.0 秒 | 约 5 分钟 |
+| 1024 | — | — | — | 4.5 秒 | 约 10 分钟 |
+| 2048 | 覆盖到 P90（1726 token） | — | — | 约 7 秒 | 约 20 分钟 |
+| 4096（本仓库采用） | 96.8%，158 个文件中 5 个超限 | 67% / 0% / 0% | 100% / 100% / 100% | 27 秒 | 约 60 分钟 |
+| 8192 | 99.1%，只多覆盖 2 个文件 | 未单独测 | 未单独测 | 67 秒 | 约 150 分钟 |
+
+几点说明：
+
+- 512 档的 49.3% 是拆分前的统计口径。当时 134 个记忆文件里 68 个被截断，合计丢失 12.2 万字。
+- 4096 档的 96.8% 对应 158 个文件，token 分布为 P50 935、P90 2402、P99 7159、P100 8739。
+- 长文检索每档样本 6 个，数量小，只能定性参考，不能当统计结论。
+- 「排第 1」指目标文件排在结果首位，「进前 3」指它出现在前三条里。实际使用中只要进前 3 就能读到。
+
+**为什么停在 4096。** 从 4096 提到 8192，单次嵌入从 3.9 秒涨到 12.1 秒，是原来的 3.1 倍，只多覆盖 2 个文件，而每次查询都要付这个代价。更划算的做法是把个别超限文件拆开：实测把 5 个超长文件拆分后，170 个文件全部在 4096 以内，12 个新拆分文件召回全部进前 2（6 个第 1、6 个第 2），内容 100% 参与嵌入且不增加任何耗时。
+
+**8192 与 32768 的差别。** 上表只测到 8192。再往上开，嵌入耗时按平方增长，而本机记忆库最长文件 8739 token，32768 的窗口用不到一半。选 32768 的模型是为了让长文档有充足余量，不代表要配到 32768。
 
 ## 目录结构
 
