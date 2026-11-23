@@ -78,11 +78,33 @@ jobs:
             TYPE="${DISPATCH_TYPE:-stable}"
             echo "Manual trigger: release type from input -> $TYPE"
           else
-            case "$TAG" in
-              *-*) TYPE="prerelease" ;;
-              *)   TYPE="stable" ;;
+            VERSION="${TAG#v}"
+            case "$VERSION" in
+              *-*)
+                TYPE="prerelease"
+                echo "Tag trigger: $TAG has a pre-release suffix -> prerelease"
+                ;;
+              *.*.*)
+                case "$VERSION" in
+                  *.*.*.* | *[!0-9.]* | .* | *. | *..*)
+                    echo "Tag trigger: $TAG is not in MAJOR.MINOR.PATCH form"
+                    exit 1
+                    ;;
+                esac
+                PATCH_PART="${VERSION##*.}"
+                if [ "$PATCH_PART" = "0" ]; then
+                  TYPE="stable"
+                  echo "Tag trigger: $TAG has patch position 0 -> stable"
+                else
+                  TYPE="prerelease"
+                  echo "Tag trigger: $TAG has patch position $PATCH_PART -> prerelease (patch release)"
+                fi
+                ;;
+              *)
+                echo "Tag trigger: $TAG is not in MAJOR.MINOR.PATCH form"
+                exit 1
+                ;;
             esac
-            echo "Tag trigger: release type from tag name -> $TYPE"
           fi
           if [ "$TYPE" != "stable" ] && [ "$TYPE" != "prerelease" ]; then
             echo "Unknown release type: $TYPE"
