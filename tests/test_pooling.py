@@ -31,6 +31,9 @@ def _install_http_stubs():
     """仅在测试环境缺少 Web 依赖时提供最小桩，用于导入纯函数。"""
 
     class DummyApp:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
         def get(self, *_args, **_kwargs):
             return lambda fn: fn
 
