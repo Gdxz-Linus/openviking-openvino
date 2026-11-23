@@ -5,6 +5,14 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      release_type:
+        description: "Release type: stable or prerelease"
+        type: choice
+        options:
+          - stable
+          - prerelease
+        default: stable
 
 permissions:
   contents: write
@@ -58,6 +66,29 @@ jobs:
           git -c advice.detachedHead=false checkout "refs/tags/$TAG"
           echo "Checked out $TAG"
           git log --oneline -1
+
+      - name: Resolve release type
+        id: type
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          DISPATCH_TYPE: ${{ github.event.inputs.release_type }}
+        run: |
+          set -eu
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TYPE="${DISPATCH_TYPE:-stable}"
+            echo "Manual trigger: release type from input -> $TYPE"
+          else
+            case "$TAG" in
+              *-*) TYPE="prerelease" ;;
+              *)   TYPE="stable" ;;
+            esac
+            echo "Tag trigger: release type from tag name -> $TYPE"
+          fi
+          if [ "$TYPE" != "stable" ] && [ "$TYPE" != "prerelease" ]; then
+            echo "Unknown release type: $TYPE"
+            exit 1
+          fi
+          echo "value=$TYPE" >> "$GITHUB_OUTPUT"
 
       - name: Verify version file matches tag
         run: |
@@ -201,18 +232,31 @@ jobs:
           LINUX_ARCHIVE: ${{ steps.package.outputs.linux_archive }}
           LINUX_CHECKSUM: ${{ steps.package.outputs.linux_checksum }}
           NOTES_FILE: ${{ steps.notes.outputs.file }}
+          RELEASE_TYPE: ${{ steps.type.outputs.value }}
         run: |
           set -eu
           ASSETS="$WINDOWS_ARCHIVE $WINDOWS_CHECKSUM $LINUX_ARCHIVE $LINUX_CHECKSUM"
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists, replacing assets and notes."
             gh release upload "$TAG" $ASSETS --clobber
-            gh release edit "$TAG" --title "$TAG" --notes-file "$NOTES_FILE"
+            if [ "$RELEASE_TYPE" = "prerelease" ]; then
+              gh release edit "$TAG" --title "$TAG" --notes-file "$NOTES_FILE" --prerelease
+            else
+              gh release edit "$TAG" --title "$TAG" --notes-file "$NOTES_FILE" --prerelease=false
+            fi
           else
             echo "Creating release $TAG."
-            gh release create "$TAG" $ASSETS \
-              --title "$TAG" \
-              --notes-file "$NOTES_FILE" \
-              --verify-tag
+            if [ "$RELEASE_TYPE" = "prerelease" ]; then
+              gh release create "$TAG" $ASSETS \
+                --title "$TAG" \
+                --notes-file "$NOTES_FILE" \
+                --verify-tag \
+                --prerelease
+            else
+              gh release create "$TAG" $ASSETS \
+                --title "$TAG" \
+                --notes-file "$NOTES_FILE" \
+                --verify-tag
+            fi
           fi
-          echo "Published: $TAG"
+          echo "Published: $TAG ($RELEASE_TYPE)"
