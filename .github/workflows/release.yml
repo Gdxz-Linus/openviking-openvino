@@ -5,13 +5,13 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Existing tag to package, for example v1.0.0"
-        required: true
 
 permissions:
   contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -31,13 +31,30 @@ jobs:
       - name: Resolve version
         id: version
         run: |
+          set -eu
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
+            VERSION=$(python -c "import tomllib; print(tomllib.load(open('VERSION.toml','rb'))['project']['version'])")
+            TAG="v${VERSION}"
+            echo "Manual trigger: tag from VERSION.toml -> $TAG"
           else
             TAG="${GITHUB_REF_NAME}"
+            echo "Tag trigger: $TAG"
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Resolved tag: $TAG"
+
+      - name: Switch to tag content
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -eu
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "Tag $TAG does not exist in this repository."
+            echo "Create and push it first: git tag $TAG && git push origin $TAG"
+            exit 1
+          fi
+          git -c advice.detachedHead=false checkout "refs/tags/$TAG"
+          echo "Checked out $TAG"
+          git log --oneline -1
 
       - name: Verify version file matches tag
         run: |
@@ -67,6 +84,7 @@ jobs:
       - name: Syntax check
         run: |
           python -m py_compile install.py
+          python -m py_compile messages.py
           python -m py_compile patches/patch_openvino.py
           python -m py_compile patches/patch_http_keepalive.py
           python -m py_compile http-server/embed_server.py
@@ -105,6 +123,7 @@ jobs:
           # Python sources: no BOM, LF only.
           for name in (
               "install.py",
+              "messages.py",
               "patches/patch_openvino.py",
               "patches/patch_http_keepalive.py",
               "http-server/embed_server.py",
@@ -173,14 +192,24 @@ jobs:
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          WINDOWS_ARCHIVE: ${{ steps.package.outputs.windows_archive }}
+          WINDOWS_CHECKSUM: ${{ steps.package.outputs.windows_checksum }}
+          LINUX_ARCHIVE: ${{ steps.package.outputs.linux_archive }}
+          LINUX_CHECKSUM: ${{ steps.package.outputs.linux_checksum }}
+          NOTES_FILE: ${{ steps.notes.outputs.file }}
         run: |
           set -eu
-          TAG="${{ steps.version.outputs.tag }}"
-          gh release create "$TAG" \
-            "${{ steps.package.outputs.windows_archive }}" \
-            "${{ steps.package.outputs.windows_checksum }}" \
-            "${{ steps.package.outputs.linux_archive }}" \
-            "${{ steps.package.outputs.linux_checksum }}" \
-            --title "$TAG" \
-            --notes-file "${{ steps.notes.outputs.file }}" \
-            --verify-tag
+          ASSETS="$WINDOWS_ARCHIVE $WINDOWS_CHECKSUM $LINUX_ARCHIVE $LINUX_CHECKSUM"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, replacing assets and notes."
+            gh release upload "$TAG" $ASSETS --clobber
+            gh release edit "$TAG" --title "$TAG" --notes-file "$NOTES_FILE"
+          else
+            echo "Creating release $TAG."
+            gh release create "$TAG" $ASSETS \
+              --title "$TAG" \
+              --notes-file "$NOTES_FILE" \
+              --verify-tag
+          fi
+          echo "Published: $TAG"
