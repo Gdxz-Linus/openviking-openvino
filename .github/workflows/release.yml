@@ -1,0 +1,186 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to package, for example v1.0.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved tag: $TAG"
+
+      - name: Verify version file matches tag
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import sys
+          import tomllib
+
+          tag = os.environ["TAG"]
+          declared = tomllib.load(open("VERSION.toml", "rb"))["project"]["version"]
+          expected = "v" + declared
+          print(f"VERSION.toml: {declared}  |  tag: {tag}")
+          if tag != expected:
+              print(f"Tag does not match VERSION.toml: expected {expected}, got {tag}")
+              sys.exit(1)
+
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          if not re.search(r"(?m)^##\s+" + re.escape(tag) + r"\s*$", text):
+              print(f"CHANGELOG.md has no section for {tag}")
+              sys.exit(1)
+          print("CHANGELOG section present")
+          PY
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+
+      - name: Syntax check
+        run: |
+          python -m py_compile install.py
+          python -m py_compile patches/patch_openvino.py
+          python -m py_compile patches/patch_http_keepalive.py
+          python -m py_compile http-server/embed_server.py
+          python -m py_compile .github/scripts/assemble_release.py
+          echo "Syntax check passed"
+
+      - name: Byte-level checks
+        run: |
+          python - <<'PY'
+          import pathlib
+          import sys
+
+          failures = []
+
+          # Batch file: pure ASCII, CRLF, no BOM.
+          batch = pathlib.Path("install.cmd").read_bytes()
+          if batch[:3] == b"\xef\xbb\xbf":
+              failures.append("install.cmd has a BOM")
+          if any(byte > 127 for byte in batch):
+              failures.append("install.cmd contains non-ASCII bytes")
+          if batch.count(b"\n") != batch.count(b"\r\n"):
+              failures.append("install.cmd has bare LF line endings")
+
+          # PowerShell file: UTF-8 with exactly one BOM, CRLF.
+          ps1 = pathlib.Path("install.ps1").read_bytes()
+          if ps1[:3] != b"\xef\xbb\xbf":
+              failures.append("install.ps1 lacks a BOM")
+          if ps1[3:6] == b"\xef\xbb\xbf":
+              failures.append("install.ps1 has a double BOM")
+          if ps1.count(b"\xef\xbb\xbf") != 1:
+              failures.append("install.ps1 BOM count is not 1")
+          if ps1.count(b"\n") != ps1.count(b"\r\n"):
+              failures.append("install.ps1 has bare LF line endings")
+          ps1.decode("utf-8-sig")
+
+          # Python sources: no BOM, LF only.
+          for name in (
+              "install.py",
+              "patches/patch_openvino.py",
+              "patches/patch_http_keepalive.py",
+              "http-server/embed_server.py",
+              ".github/scripts/assemble_release.py",
+          ):
+              raw = pathlib.Path(name).read_bytes()
+              if raw[:3] == b"\xef\xbb\xbf":
+                  failures.append(f"{name} has a BOM")
+              if b"\r\n" in raw:
+                  failures.append(f"{name} has CRLF line endings")
+              raw.decode("utf-8")
+
+          if failures:
+              print("Byte-level checks failed:")
+              for item in failures:
+                  print(f"  - {item}")
+              sys.exit(1)
+          print("Byte-level checks passed")
+          PY
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Assemble release packages
+        id: package
+        run: |
+          set -eu
+          TAG="${{ steps.version.outputs.tag }}"
+          python .github/scripts/assemble_release.py \
+            --tag "$TAG" \
+            --source . \
+            --dist dist
+          WINDOWS_ROOT="dist/openviking-openvino-windows-${TAG}"
+          LINUX_ROOT="dist/openviking-openvino-linux-${TAG}"
+          echo "windows_archive=${WINDOWS_ROOT}.zip" >> "$GITHUB_OUTPUT"
+          echo "windows_checksum=${WINDOWS_ROOT}.sha256" >> "$GITHUB_OUTPUT"
+          echo "linux_archive=${LINUX_ROOT}.zip" >> "$GITHUB_OUTPUT"
+          echo "linux_checksum=${LINUX_ROOT}.sha256" >> "$GITHUB_OUTPUT"
+          ls -l dist
+
+      - name: Extract release notes
+        id: notes
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          tag = os.environ["TAG"]
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          pattern = re.compile(
+              r"(?ms)^##\s+" + re.escape(tag) + r"\s*$\n(.*?)(?=^##\s+\S|\Z)"
+          )
+          match = pattern.search(text)
+          body = match.group(1).strip() if match else ""
+          if not body:
+              body = f"See CHANGELOG.md for the full list of changes in {tag}."
+          target = pathlib.Path("release-notes.md")
+          target.write_text(body + "\n", encoding="utf-8")
+          print(f"Release notes: {len(body)} characters")
+          PY
+          echo "file=release-notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          TAG="${{ steps.version.outputs.tag }}"
+          gh release create "$TAG" \
+            "${{ steps.package.outputs.windows_archive }}" \
+            "${{ steps.package.outputs.windows_checksum }}" \
+            "${{ steps.package.outputs.linux_archive }}" \
+            "${{ steps.package.outputs.linux_checksum }}" \
+            --title "$TAG" \
+            --notes-file "${{ steps.notes.outputs.file }}" \
+            --verify-tag

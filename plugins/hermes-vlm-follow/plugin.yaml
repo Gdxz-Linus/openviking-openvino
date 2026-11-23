@@ -1,4 +1,4 @@
-name: vlm-follow
+name: hermes-vlm-follow
 version: 1.0.0
 description: "让 OpenViking 的记忆抽取通道自动跟随 Hermes 当前实际使用的模型通道。"
 pip_dependencies: []

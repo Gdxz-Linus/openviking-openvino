@@ -13,10 +13,12 @@ OpenViking 的记忆抽取（`session_commit`）调用一个大模型生成摘�
 复制到 Hermes 插件目录：
 
 ```
-<HERMES_HOME>/plugins/vlm-follow/
+<HERMES_HOME>/plugins/hermes-vlm-follow/
 ├── __init__.py
 └── plugin.yaml
 ```
+
+目录名与 `plugin.yaml` 的 `name` 字段一致，都叫 `hermes-vlm-follow`。
 
 如果 `ov.conf` 不在默认位置（`~/.openviking/ov.conf`），在 Hermes 的 `.env` 里指定：
 

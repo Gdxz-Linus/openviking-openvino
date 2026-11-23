@@ -1,0 +1,17 @@
+# 本项目与上游适配关系的单一来源。
+# 修改版本或适配目标时只改这一个文件，安装脚本与发布流程都从这里读取。
+# 版本号以 git tag 为准，发布流程会校验两者一致，不一致则中止发布。
+
+[project]
+# 本项目自身的版本号，发布时须与 git tag 一致（tag 形如 v0.1.0）
+version = "0.1.0"
+
+[adapt]
+# 适配的 OpenViking 官方版本
+openviking = "0.5.3"
+
+# 该版本官方原版 local_embedders.py 的字节数与 SHA-256。
+# 安装脚本据此判定补丁目标是否为可用状态：字节与哈希都一致即原版，可直接打补丁；
+# 内容含补丁标记即已打过；两者都不是则报目标版本不符。
+openviking_file_bytes = 8774
+openviking_file_sha256 = "adf69925352febc2f9bc88e55a41ada6bcad01acbe1db88d2b7ea89c8f0bfa17"

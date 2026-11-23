@@ -1,9 +1,9 @@
 /**
- * openviking-vlm-follow
+ * dsh-vlm-follow
  *
  * 让 OpenViking 的记忆抽取 VLM 跟随 DSH 当前实际使用的模型通道。
  *
- * 与 Hermes 的 vlm-follow 插件对称：
+ * 与 Hermes 的 hermes-vlm-follow 插件对称：
  *   Hermes: pre_api_request 钩子 → 写 ov.conf 的 vlm 段
  *   DSH:    llm/stream waterfall → 写 ov.conf 的 vlm 段
  *
@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { createRequire } from 'node:module'
 
-export const name = 'openviking-vlm-follow'
+export const name = 'dsh-vlm-follow'
 export const inject = ['llm']
 
 const require = createRequire(import.meta.url)
@@ -250,7 +250,7 @@ export function apply(ctx) {
     if (changed) {
       try {
         ctx.logger?.info?.(
-          `openviking-vlm-follow: 记忆抽取已跟随到 ${provider.baseURL} / ${modelName}`,
+          `dsh-vlm-follow: 记忆抽取已跟随到 ${provider.baseURL} / ${modelName}`,
         )
       } catch { /* logging must never break the path */ }
     }
