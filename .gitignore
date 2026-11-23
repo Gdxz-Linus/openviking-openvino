@@ -6,7 +6,6 @@ __pycache__/
 # 运行产物
 ov_cache/
 *.log
-docs/*.tmp
 
 # 真实配置与凭据
 ov.conf

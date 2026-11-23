@@ -25,7 +25,6 @@ COMMON_ITEMS = (
     "http-server",
     "configs",
     "plugins",
-    "docs",
     "models",
 )
 WINDOWS_ONLY_ITEMS = ("install.cmd",)

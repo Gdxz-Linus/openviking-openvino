@@ -2,9 +2,9 @@
 
 [中文](README.md) | English
 
-OpenViking ships with `bge-small-zh-v1.5` as its default local embedding model: 512 dimensions, 512 token context, CPU inference. That ceiling is too low for a memory system — anything beyond 512 tokens is truncated, so long documents and long session summaries lose a lot of information during extraction and retrieval, and it is unsuitable for a knowledge base.
+OpenViking is a powerful memory system and knowledge-base tool. Its default local embedding model is `bge-small-zh-v1.5`: 512 dimensions, 512 context, CPU inference. That ceiling is too low for a memory system — anything beyond 512 is truncated outright, so long documents and long session summaries lose a lot of information in both summarization and retrieval, and it is even less suitable for building a knowledge base.
 
-Moving to a 4096-context, 1024-dimension model fixes the quality problem, but llama.cpp on CPU is far too slow. Measured conditions: a 677M parameter Q8 GGUF model, 22 logical CPU cores, 151.7 token/s throughput, both `n_ctx` and `n_batch` set to 4096.
+Switching to a 4096-context, 1024-dimension embedding model solves the quality problem, but the default llama.cpp CPU inference is far too slow. Measured conditions: a 677M parameter Q8 GGUF model, 22 logical CPU cores, 151.7 token/s throughput, context set to 4096.
 
 | Text length | CPU embedding time |
 | --- | --- |
@@ -12,19 +12,18 @@ Moving to a 4096-context, 1024-dimension model fixes the quality problem, but ll
 | 2520 tokens | 16.3 s |
 | 4000 tokens | 32.2 s |
 
-A document close to the 4096-token limit takes over 30 seconds; rebuilding a vector store in bulk takes over 40 minutes.
+A document close to 4096 context takes over 30 seconds to embed; a full vector store rebuild takes over 40 minutes.
 
-This project runs the same int8 model on an Intel integrated GPU through OpenVINO, cutting the same 4096-token embedding from 30.1 seconds to 4.0 seconds. Intel CPU, GPU or NPU can all run int8 quantized models directly; two deployment forms are provided, in-process and HTTP, along with tooling that keeps the memory-extraction model aligned with the host agent.
+This project runs the same int8 embedding model on an Intel integrated GPU through OpenVINO, cutting the same 4096-token text from 30.1 seconds to 4.0 seconds. Intel CPU and GPU can both run int8 quantized models directly. Two deployment forms are provided, in-process and HTTP, plus tooling that keeps the memory-extraction model following the host agent's settings.
 
 ## Who this is for
 
 | Your situation | Suitable |
 | --- | --- |
-| Using OpenViking for local memory or a knowledge base on Intel CPU, GPU or NPU | Yes |
-| Wanting to escape the llama.cpp performance ceiling on Intel hardware | Yes |
-| Needing to switch between in-process and HTTP forms | Yes |
-| Using an NVIDIA GPU | llama.cpp's CUDA backend is more direct; OpenVINO offers no advantage |
-| Using an AMD GPU | No. OpenVINO support for AMD is limited |
+| Using OpenViking for local memory or a knowledge base on Intel CPU or GPU | Yes |
+| Wanting to escape the llama.cpp performance ceiling on Intel platforms | Yes |
+| Using an NVIDIA GPU | No, OpenVINO offers no advantage |
+| Using an AMD GPU | No. OpenVINO support is limited |
 | Only wanting OpenViking's default configuration | Not needed. The built-in bge-small works out of the box |
 | Unwilling to re-apply patches after upgrades | Caution. This repository is a patch, not an upstream built-in capability |
 
@@ -32,19 +31,19 @@ The repository has three parts:
 
 | Part | What it solves | Who needs it |
 | --- | --- | --- |
-| Embedding backend patch | Lets OpenViking support OpenVINO (in-process or HTTP) | Anyone running local embedding on Intel hardware |
+| Embedding backend patch | Lets OpenViking support OpenVINO | Anyone running local embedding models on Intel GPUs |
 | HTTP embedding service | Wraps OpenVINO behind an OpenAI-compatible API | Anyone using the HTTP form or sharing one GPU across instances |
-| Memory model sync plugins | Keeps the memory-extraction model aligned with the host system | Anyone running Hermes or DSH |
+| Memory model sync plugin | Keeps the memory-extraction model following the agent's settings | Anyone running Hermes or DSH |
 
 ## Requirements
 
 | Item | Requirement | How to check |
 | --- | --- | --- |
-| OpenViking | Use the release of this project that matches your version; see that release's notes for the adapted version | `pip show openviking` |
+| OpenViking | Use the release of this project that matches your version | `pip show openviking` |
 | Python | 3.13 (the venv bundled with OpenViking is fine) | — |
 | OpenVINO Runtime | 2026.4 | `python -c "import openvino; print(openvino.__version__)"` |
 | Model | OpenVINO IR format (xml, bin, tokenizer) | See the model table below |
-| Hardware | Intel CPU works; GPU or NPU needs the matching driver | `python -c "import openvino as ov; print(ov.Core().available_devices)"` |
+| Hardware | Intel CPU works; GPU needs the matching driver | `python -c "import openvino as ov; print(ov.Core().available_devices)"` |
 | Disk | Models from about 600 MB each, compile cache about 2 GB | — |
 | Memory | In-process form uses about 1.6 GB resident | Check in Task Manager |
 
@@ -54,7 +53,7 @@ The repository has three parts:
 | --- | --- | --- |
 | Windows 10/11 (x86_64) | Yes | Full support, including Intel integrated GPU acceleration |
 | Linux (x86_64) | Yes | Full support; GPU acceleration requires the Intel graphics driver |
-| macOS | No | OpenVINO only provides CPU inference on macOS, so GPU acceleration is unavailable |
+| macOS | No | OpenVINO only provides CPU inference on macOS |
 | ARM (any platform) | No | OpenVINO has no GPU support on ARM |
 
 ## Embedding models
@@ -69,28 +68,28 @@ All five work out of the box; pick one. They are all int8. The links below use a
 | SEA-LION-ModernBERT-Embedding-600M | 612M | 1024 | 8192 | 3D, mean | None | 11 SEA languages plus Chinese | [Download](https://hf-mirror.com/aisingapore/SEA-LION-ModernBERT-Embedding-600M-OV) |
 | embeddinggemma-2 | 744M | **768** | 8192 | 2D, built into model | `task: …` | 100+ languages | [Download](https://hf-mirror.com/wesjos/embeddinggemma-2-openvino-int8) |
 
-The patch registers all five. Choose one and set the matching `model` and `dimension` in `ov.conf`; no manual table entry is needed.
+The patch ships with this five-model list. Choose one and set the matching `model` and `dimension` in `ov.conf`; no manual table entry is needed.
 
 These five are not one model with different weights — the differences must be configured per model, otherwise the vectors come out wrong:
 
 | Difference | Detail |
 | --- | --- |
 | Dimension | Only embeddinggemma-2 is 768; the other four are 1024. A wrong value fails at startup |
-| Output shape | harrier and embeddinggemma-2 already output sentence vectors (2D); the other three output per-token hidden states (3D) and need pooling |
+| Output shape | harrier and embeddinggemma-2 output sentence vectors directly (2D); the other three output per-token hidden states (3D) and need pooling |
 | Pooling | Qwen3 uses last-token, bge-m3 uses CLS, SEA-LION uses mean. A wrong choice noticeably degrades retrieval |
 | Normalization | Qwen3, bge-m3 and SEA-LION need explicit normalization, otherwise cosine similarity is distorted; the other two normalize internally |
 | Query prefix | harrier and Qwen3 need the `Instruct: …` prefix, bge-m3 requires none, embeddinggemma-2 needs its own on both query and document sides |
 | Model file name | The first four use `openvino_model.xml`; embeddinggemma-2's text tower is `text_int8.xml` |
 
-The patch and the HTTP service handle all of this per model. You only need to get `model` and `dimension` right in `ov.conf`.
+The patch and the HTTP service handle these differences per model. You only need to get `model` and `dimension` right in `ov.conf`.
 
 ### Changing models requires a vector store rebuild
 
-A new model may have a different dimension and pooling method, so existing vectors cannot be reused — everything must be re-embedded. This is the only cost of switching models; budget the time.
+A new model may have a different dimension and pooling method, so existing vectors cannot be reused — everything must be re-embedded. This is the only cost of switching models.
 
-### Custom models
+### Model conversion
 
-int8 embedding models are limited in number, so you may want to convert your own. Converted models are outside the patch's built-in set; describe them with `openvino_custom.json` placed next to the model's `tokenizer.json`:
+Published int8 embedding models are limited in number, so you may want to convert other models you need. Custom models are outside the patch's built-in list; a `custom` entry is reserved for them: place an `openvino_custom.json` in the model directory (next to `tokenizer.json`), then set `model` to `custom` and `model_path` to the absolute path of the IR file in `ov.conf`:
 
 ```json
 {
@@ -102,7 +101,7 @@ int8 embedding models are limited in number, so you may want to convert your own
 }
 ```
 
-Set `model` to `custom` and `model_path` to the IR file in `ov.conf`. See `models/模型获取.md` for the full field reference and probe method.
+See `models/模型获取.md` for the full field reference and probe method.
 
 ## Two interfaces
 
@@ -114,7 +113,7 @@ Set `model` to `custom` and `model_path` to the IR file in `ov.conf`. See `model
 | Configuration | `provider: local` | `provider: openai` + `api_base` |
 | Best for | Efficient, stable production | Cross-process reuse, shared service across instances |
 
-The HTTP form adds one more layer of request handling, so it is the secondary option.
+The HTTP form adds one extra layer of request handling.
 
 ## Performance
 
@@ -156,20 +155,18 @@ A few notes:
 - **8192 and 4096 give identical results.** The longest file in the store is 3893 tokens, all within 4096, so 8192 covers nothing extra while costing 3.5× the build time. 4096 is recommended.
 - Six files and 18 questions per level is a small sample; treat it as directional, not statistical.
 
-Going from 4096 to 8192 raises a single long embedding from 3.9 to 12.1 seconds, 3.1×, but it runs in the background. The current store's longest file is 3893 tokens, already covered by 4096.
+Going from 4096 to 8192 raises a single long embedding from 3.9 to 12.1 seconds, 3.1×, but it runs in the background with little impact in use. The current store's longest file is 3893 tokens, already covered by 4096.
 
 ## Keeping the memory-extraction model in sync
 
-OpenViking's memory extraction calls an LLM to generate summaries, with the endpoint hand-maintained and no configuration option. It easily drifts from the host system: when the host switches or retires a model, OpenViking's config does not follow, extraction starts failing, and the failure shows up only in logs.
+OpenViking's memory extraction calls an LLM to generate summaries. The original has no option to follow the agent's settings automatically: when the agent switches models and the configuration does not follow, extraction risks failing, and the failure shows up only in logs — the conversation itself shows nothing wrong.
 
-This project ships custom plugins for Hermes and DSH that sync the model automatically, writing the model actually in use into OpenViking's config:
+This project provides one plugin for Hermes and one for DSH, each writing the model the agent is currently using into OpenViking's configuration:
 
 | Plugin | Host | Language |
 | --- | --- | --- |
 | `hermes-vlm-follow` | Hermes | Python |
 | `dsh-vlm-follow` | DSH | JavaScript |
-
-OpenViking rereads its config every 30 seconds, so changes take effect within half a minute without restarting the service.
 
 ## One-command install
 
@@ -207,13 +204,7 @@ OpenVINO Runtime and tokenizers are installed automatically when missing; you do
 
 If more than one OpenViking is installed, use `--ov-home` to say which one to target.
 
-### First run
-
-Run a dry run first to confirm the paths, models and agents it detects:
-
-```bash
-python install.py --dry-run --ov-home /path/to/OpenViking
-```
+After an upgrade, run the install wizard again and it restores the patches automatically; no manual patch commands needed.
 
 ### Prerequisites
 
@@ -221,65 +212,13 @@ The wizard only detects and informs; it does not install these for you:
 
 | Item | Requirement |
 | --- | --- |
-| OpenViking | Official release; the exact version is stated in the release notes of the build you use |
+| OpenViking | Official release installed; the exact version is stated in the release notes of the build you use |
 | Agent-side OpenViking plugin | At least one agent connected to OpenViking and working |
 | Embedding model | One of the five built-ins downloaded to the cache directory, or your own OpenVINO IR model |
 
 How agent-side plugins are detected: for Hermes, whether `plugins/openviking/` exists; for DSH, whether the profile's `package.json` depends on `@openviking/`.
 
 If agents are installed but none is connected to OpenViking, the wizard stops at the probe stage and lists what each one is missing.
-
-## Quick start: in-process
-
-1. Prepare an OpenVINO IR model and place it in the embedding model directory.
-2. Apply the backend patch:
-
-```bash
-python patches/patch_openvino.py --check    # inspect first
-python patches/patch_openvino.py            # apply
-```
-
-The patch is adapted against the official release and applies directly, with no prior modification needed. `--check` reports whether this patch is already applied:
-
-| `--check` state | Meaning | Exit code |
-| --- | --- | --- |
-| Not patched | Not applied yet | 2 |
-| Patched | Already current | 0 |
-
-The script is safe to run repeatedly. If the target file's structure does not match the adapted version, it stops with an error and writes nothing.
-
-3. Copy `configs/ov.conf.local.example` to `ov.conf` and fill in the model path and credentials.
-4. Restart the OpenViking service. The startup log should show `OpenVINO embedder ready: model=... device=GPU`.
-
-## Quick start: HTTP
-
-1. Start the embedding service, naming the model preset with `--model`:
-
-```bash
-python http-server/embed_server.py --model harrier-ov-int8 --model-dir D:/OpenViking/models/harrier-ov-int8 --port 8010
-```
-
-`--model` accepts the same five values as the table above. Each model places its IR differently; the service finds it by preset: `openvino_model.xml` for the first four (harrier inside `int8/`), `text_int8.xml` for embeddinggemma-2.
-
-2. Apply the keepalive patch (without it, bulk writes reconnect constantly):
-
-```bash
-python patches/patch_http_keepalive.py
-```
-
-3. Build `ov.conf` from `configs/ov.conf.http.example`.
-4. Restart OpenViking and confirm `/health` and the embedding endpoint are reachable.
-
-## Re-apply patches after upgrading
-
-`pip install --upgrade openviking` replaces the entire `site-packages/openviking/` tree, discarding both patches. Re-run them in order:
-
-```bash
-python patches/patch_openvino.py
-python patches/patch_http_keepalive.py    # HTTP form only
-```
-
-You can also re-run the installer; it detects that the patch is gone and reapplies it.
 
 ## License
 

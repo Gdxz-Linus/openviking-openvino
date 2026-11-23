@@ -973,7 +973,7 @@ class ReleasePackageTests(unittest.TestCase):
             "VERSION.toml",
             "LICENSE",
         )
-        dir_names = ("patches", "http-server", "configs", "plugins", "docs", "models")
+        dir_names = ("patches", "http-server", "configs", "plugins", "models")
 
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "source"
